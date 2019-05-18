@@ -1,4 +1,4 @@
-MatchType,Value,Category
+MatchType,Percentage,Category
 STRICT,0.00,ORIGINAL
 SUPERSET,100.00,ORIGINAL
 SUPERSET_NO_TYPES,100.00,ORIGINAL
