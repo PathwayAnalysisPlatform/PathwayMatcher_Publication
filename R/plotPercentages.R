@@ -37,7 +37,7 @@ plotPercentagesSeparated <- function(percentages){
     percentages$MatchType <- factor(percentages$MatchType, levels = summarised$MatchType[order(-summarised$Percentage)])
     
     p <- ggplot(percentages, aes(x=MatchType, y=Percentage, color=Category))
-    if(nrow(percentages) > 14){
+    if(nrow(percentages) > 16){
         p <- p + geom_boxplot(position = position_dodge(0.0), width = 1.2, size = 0.5) +
             geom_jitter(width = 0.1, alpha = 0.5, size = dotSize)
     } else {
