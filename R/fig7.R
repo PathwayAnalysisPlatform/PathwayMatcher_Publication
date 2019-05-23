@@ -40,7 +40,7 @@ legend <- get_legend(plot1)
 grid <- plot_grid(grid, legend, rel_widths = c(2, 0.3))
 grid
 print("Saving plot")
-save_plot("docs/fig9.png", grid,
+save_plot("docs/fig7.png", grid,
           ncol = 2, nrow =1,
           base_aspect_ratio = 2:1
 )

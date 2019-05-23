@@ -24,7 +24,7 @@ print(paste("Plotting percentages"))
 percentagesPlot <- plotPercentagesSeparated(percentages)
 percentagesPlot
 
-png("docs/fig10.png", height = 12, width = 12, units = "cm", res = 600)
+png("docs/fig8.png", height = 12, width = 12, units = "cm", res = 600)
 plot(percentagesPlot)
 dummy <- dev.off()
 
