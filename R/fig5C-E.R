@@ -65,7 +65,7 @@ getAccession <- function(proteoform) {
 }
 
 
-#' Returns the accession corresponding to a proteoform.
+#' Returns the gene name corresponding to a proteoform.
 #' 
 #' @param proteoform the proteoform identifier
 #' @return the protein accession of the proteoform

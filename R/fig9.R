@@ -14,12 +14,25 @@ library(plyr)
 source("R/plotPercentages.R")
 
 # Parameters
+accessionsFile <- "resources/phosphosites/accessions.txt"
 percentagesFile <- "resources/sensitivity/percentagesFilePhosphoproteoforms.csv"
+accessionsEdgesFile <- "resources/network_1.8.1/proteinInternalEdges.tsv.gz"
 
 # Main script
 
 print(paste("Loading data from", percentagesFile))
 percentages <- read.csv(percentagesFile, header = T)
+
+print(paste("Loading data from", accessionsFile))
+accessions <- unique(readLines(accessionsFile))
+
+print(paste("Loading data from", accessionsEdgesFile))
+edgesAccessions <- read.table(accessionsEdgesFile, header = T, sep = "\t", quote = "", comment.char = "", stringsAsFactors = F)
+annotatedAccessions <- unique(c(edgesAccessions$id1, edgesAccessions$id2))
+
+print(paste("Loading data from", accessionsEdgesFile))
+nAccessions <- sum(accessions %in% annotatedAccessions)
+accessionsPercentage <- 100 * nAccessions / length(accessions)
 
 print(paste("Plotting percentages"))
 percentagesPlot <- plotPercentages(percentages)

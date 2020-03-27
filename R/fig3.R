@@ -7,16 +7,22 @@ startTimeAll <- proc.time()
 # Libraries
 
 library(ggplot2)
-library(igraph)
 library(ggrepel)
+library(scico)
+library(graphlayouts)
+library(dplyr)
+library(purrr)
+library(igraph)
 
 
 # Parameters
 
+set.seed(240419)
+
 ## Input files
 
-proteoformEdgesFile <- "docs/resources/proteoformInternalEdges.tsv.gz"
-accessionsEdgesFile <- "docs/resources/proteinInternalEdges.tsv.gz"
+proteoformEdgesFile <- "resources/network_1.8.1/proteoformInternalEdges.tsv.gz"
+accessionsEdgesFile <- "resources/network_1.8.1/proteinInternalEdges.tsv.gz"
 
 ## Plot theme
 
@@ -28,6 +34,46 @@ theme_set(theme_bw(base_size = 11))
 palette <- 'cork'
 accessionColor <- scico(n = 1, begin = 0.15, end = 0.15, palette = palette)
 proteoformColor <- scico(n = 1, begin = 0.85, end = 0.85, palette = palette)
+
+
+## Modification names
+
+modNameDFs <- data.frame(
+    accession = c(
+        "00046", 
+        "00047", 
+        "00064", 
+        "00076",
+        "00084", 
+        "00078", 
+        "00085", 
+        "01148",
+        "01149"
+    ),
+    fullName = c(
+        "O-phospho-L-serine", 
+        "O-phospho-L-threonine", 
+        "N6-acetyl-L-lysine", 
+        "symmetric dimethyl-L-arginine",
+        "N6,N6-dimethyl-L-lysine",
+        "omega-N-methyl-L-arginine",
+        "N6-methyl-L-lysine", 
+        "ubiquitinylated lysine",
+        "sumoylated lysine"
+    ),
+    shortName = c(
+        "pS", 
+        "pT", 
+        "aceK", 
+        "dimethR", 
+        "dimethK", 
+        "methR", 
+        "methK", 
+        "ubiK",
+        "sumoK"
+    ),
+    stringsAsFactors = F
+)
 
 
 
@@ -52,6 +98,62 @@ getAccession <- function(proteoform) {
     }
     
     return(accession)
+    
+}
+
+#' Returns the name corresponding to a proteoform.
+#' 
+#' @param proteoform the proteoform identifier
+#' 
+#' @return the name of the proteoform
+getLabel <- function(proteoform) {
+    
+    indexSemicolon <- regexpr(proteoform, pattern = ";")
+    
+    accession <- substr(proteoform, start = 1, stop = indexSemicolon - 1)
+    indexDash <- regexpr(accession, pattern = "-")
+    
+    if (indexDash > 1) {
+        
+     stop("Isoform not implemented.")
+    
+    }
+    
+    if (indexSemicolon == nchar(proteoform)) {
+        return("Canonical")
+    }
+    
+    modString <- substr(proteoform, start = indexSemicolon + 1, stop = nchar(proteoform))
+    
+    mods <- strsplit(modString, split = ",")[[1]]
+    modNames <- character(length(mods))
+    
+    for (i in 1:length(mods)) {
+        
+        mod <- mods[i]
+        indexColon <- regexpr(mod, pattern = ":")
+        modAccession <- substr(mod, start = 1, stop = indexColon - 1)
+        
+        if (! modAccession %in% modNameDFs$accession) {
+            stop(paste0("Name for modification ", modAccession, " not found."))
+        }
+        
+        modName <- modNameDFs$shortName[modNameDFs$accession == modAccession]
+        modSite <- substr(mod, start = indexColon + 1, stop = nchar(mod))
+        
+        if (modSite != "null") {
+            
+            modName <- paste0(modName, modSite)
+            
+        }
+        
+        modNames[i] <- modName
+        
+    }
+    
+    proteoformName <- paste(modNames, collapse = " ")
+    
+    return(proteoformName)
     
 }
 
@@ -100,9 +202,9 @@ proteoformsPerAccession <- as.data.frame(table(allProteoformsAccessions))
 
 ## Select edges interacting with protein of interest
 
-accession <- "P04637"
+targetAccession <- "P04637"
 
-proteoformsExample <- unique(c(edgesProteoforms$id1[accession1 == accession], edgesProteoforms$id2[accession2 == accession]))
+proteoformsExample <- unique(c(edgesProteoforms$id1[accession1 == targetAccession], edgesProteoforms$id2[accession2 == targetAccession]))
 proteoformsExampleModifications <- c()
 
 for (proteoform in proteoformsExample) {
@@ -113,8 +215,8 @@ for (proteoform in proteoformsExample) {
 
 proteoformsExampleModifications <- unique(proteoformsExampleModifications)
 
-edgesProteoformsExample <- edgesProteoforms[accession1 == accession | accession2 == accession, ]
-edgesAccessionsExample <- edgesAccessions[edgesAccessions$id1 == accession | edgesAccessions$id2 == accession, ]
+edgesProteoformsExample <- edgesProteoforms[accession1 == targetAccession | accession2 == targetAccession, ]
+edgesAccessionsExample <- edgesAccessions[edgesAccessions$id1 == targetAccession | edgesAccessions$id2 == targetAccession, ]
 
 
 ## Make graph
@@ -122,89 +224,118 @@ edgesAccessionsExample <- edgesAccessions[edgesAccessions$id1 == accession | edg
 graphProteoforms <- graph_from_data_frame(edgesProteoformsExample)
 graphAccessions <- graph_from_data_frame(edgesAccessionsExample)
 
-graphProteoforms <- simplify(graphProteoforms, remove.multiple = T, remove.loops = T, edge.attr.comb = "first")
-graphAccessions <- simplify(graphAccessions, remove.multiple = T, remove.loops = T, edge.attr.comb = "first")
+graphProteoforms <- igraph::simplify(graphProteoforms, remove.multiple = T, remove.loops = T, edge.attr.comb = "first")
+graphAccessions <- igraph::simplify(graphAccessions, remove.multiple = T, remove.loops = T, edge.attr.comb = "first")
 
 
 ## Plot graphs
 
-layout <- layout_with_kk(graphAccessions)
+layout <- layout_igraph_stress(graphAccessions)
 
-verticesDF <- data.frame(name = V(graphAccessions)$name, x = layout[, 1], y = layout[, 2], stringsAsFactors = F)
-verticesDF$target <- ifelse(verticesDF$name == accession, accession, "Other")
+verticesDF <- data.frame(id = V(graphAccessions)$name, x = layout[, 1], y = layout[, 2], stringsAsFactors = F)
+verticesDF %>%
+    mutate(
+        target = ifelse(id == targetAccession, targetAccession, "Other")
+    ) -> verticesDF
 x <- verticesDF$x
-names(x) <- verticesDF$name
+names(x) <- verticesDF$id
 y <- verticesDF$y
-names(y) <- verticesDF$name
+names(y) <- verticesDF$id
+
+verticesDF %>% 
+    filter(
+        target == targetAccession
+    ) -> targetVertices
 
 edgesList <- get.edgelist(graphAccessions)
 edgesDF <- data.frame(name1 = edgesList[, 1], name2 = edgesList[, 2], stringsAsFactors = F)
-edgesDF$x1 <- x[edgesDF$name1]
-edgesDF$y1 <- y[edgesDF$name1]
-edgesDF$x2 <- x[edgesDF$name2]
-edgesDF$y2 <- y[edgesDF$name2]
+edgesDF %>%
+    mutate(
+        x1 = x[name1],
+        y1 = y[name1],
+        x2 = x[name2],
+        y2 = y[name2]
+    ) -> edgesDF
 
-graphPlot <- ggplot()
+graphPlot <- ggplot() + 
+    geom_segment(data = edgesDF, aes(x = x1, y = y1, xend = x2, yend = y2), col = accessionColor, alpha = 0.2, size = 0.5) + 
+    geom_point(data = verticesDF, aes(x = x, y = y, col = target, size = target, alpha = target)) + 
+    geom_label(data = targetVertices, aes(x = x, y = y, label = "italic(TP53)"), col = "red", parse = T) + 
+    scale_color_manual(values = c(accessionColor, "red")) + 
+    scale_size_manual(values = c(1, 2)) + 
+    scale_alpha_manual(values = c(0.5, 1)) +
+    ggtitle("Gene-centric") + 
+    theme(
+        legend.position = "none",
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "white"),
+        plot.title = element_text(hjust = 0.5)
+    )
 
-graphPlot <- graphPlot + geom_segment(data = edgesDF, aes(x = x1, y = y1, xend = x2, yend = y2), col = accessionColor, alpha = 0.2, size = 0.5)
-graphPlot <- graphPlot + geom_point(data = verticesDF, aes(x = x, y = y, col = target, size = target, alpha = target))
 
-graphPlot <- graphPlot + scale_color_manual(values = c(accessionColor, "red"))
-graphPlot <- graphPlot + scale_size_manual(values = c(1, 2))
-graphPlot <- graphPlot + scale_alpha_manual(values = c(0.5, 1))
-
-graphPlot <- graphPlot + theme(legend.position = "none",
-                               axis.ticks = element_blank(),
-                               axis.text = element_blank(),
-                               axis.title = element_blank(),
-                               panel.grid = element_blank(),
-                               panel.border = element_rect(color = "white"))
-
-
-png(paste0("figures/paper/fig_1C.png"), height = 12, width = 12, units = "cm", res = 600)
+png(paste0("docs/fig_3A.png"), height = 12, width = 12, units = "cm", res = 600)
 plot(graphPlot)
 dummy <- dev.off()
 
-layout <- layout_with_kk(graphProteoforms)
+layout <- layout_igraph_backbone(graphProteoforms)
 
-verticesDF <- data.frame(name = V(graphProteoforms)$name, x = layout[, 1], y = layout[, 2], stringsAsFactors = F)
-verticesDF$accession <- sapply(X = verticesDF$name, FUN = getAccession)
-verticesDF$target <- ifelse(verticesDF$accession == accession, accession, "Other")
+verticesDF <- data.frame(id = V(graphProteoforms)$name, x = layout[, 1], y = layout[, 2], stringsAsFactors = F)
+verticesDF %>%
+    mutate(
+        accession = map(id, getAccession),
+        target = ifelse(accession == targetAccession, targetAccession, "Other")
+    ) -> verticesDF
 x <- verticesDF$x
-names(x) <- verticesDF$name
+names(x) <- verticesDF$id
 y <- verticesDF$y
-names(y) <- verticesDF$name
+names(y) <- verticesDF$id
+
+verticesDF %>% 
+    filter(
+        target == targetAccession
+    ) %>%
+    mutate(
+        label = map(id, getLabel),
+        number = row_number()
+    ) -> targetVertices
 
 edgesList <- get.edgelist(graphProteoforms)
 edgesDF <- data.frame(name1 = edgesList[, 1], name2 = edgesList[, 2], stringsAsFactors = F)
-edgesDF$x1 <- x[edgesDF$name1]
-edgesDF$y1 <- y[edgesDF$name1]
-edgesDF$x2 <- x[edgesDF$name2]
-edgesDF$y2 <- y[edgesDF$name2]
-edgesDF$accession1 <- sapply(X = edgesDF$name1, FUN = getAccession)
-edgesDF$accession2 <- sapply(X = edgesDF$name2, FUN = getAccession)
+edgesDF %>%
+    mutate(
+        x1 = x[name1],
+        y1 = y[name1],
+        x2 = x[name2],
+        y2 = y[name2],
+        accession1 = map(name1, getAccession),
+        accession2 = map(name2, getAccession),
+        target = ifelse(accession1 == targetAccession & accession2 == targetAccession, targetAccession, "Other")
+    ) %>%
+    arrange(target) -> edgesDF
 
-edgesDF$target <- ifelse(edgesDF$accession1 == accession & edgesDF$accession2 == accession, accession, "Other")
-edgesDF <- edgesDF[order(edgesDF$target), ]
+graphPlot <- ggplot() + 
+    geom_segment(data = edgesDF, aes(x = x1, y = y1, xend = x2, yend = y2, col = target, size = target), alpha = 0.2) + 
+    geom_point(data = verticesDF, aes(x = x, y = y, col = target, size = target, alpha = target)) + 
+    geom_label_repel(data = targetVertices, aes(x = x, y = y, label = number), col = "red") + 
+    scale_color_manual(values = c(proteoformColor, "red")) + 
+    scale_size_manual(values = c(1, 2)) + 
+    scale_alpha_manual(values = c(0.5, 1)) +
+    ggtitle("Proteoform-centric") + 
+    theme(
+        legend.position = "none",
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        panel.border = element_rect(color = "white"),
+        plot.title = element_text(hjust = 0.5)
+    )
 
-graphPlot <- ggplot()
 
-graphPlot <- graphPlot + geom_segment(data = edgesDF, aes(x = x1, y = y1, xend = x2, yend = y2, col = target, size = target), alpha = 0.2)
-graphPlot <- graphPlot + geom_point(data = verticesDF, aes(x = x, y = y, col = target, size = target, alpha = target))
-
-graphPlot <- graphPlot + scale_color_manual(values = c(proteoformColor, "red"))
-graphPlot <- graphPlot + scale_size_manual(values = c(1, 2))
-graphPlot <- graphPlot + scale_alpha_manual(values = c(0.5, 1))
-
-graphPlot <- graphPlot + theme(legend.position = "none",
-                               axis.ticks = element_blank(),
-                               axis.text = element_blank(),
-                               axis.title = element_blank(),
-                               panel.grid = element_blank(),
-                               panel.border = element_rect(color = "white"))
-
-
-png(paste0("figures/paper/fig_1D.png"), height = 12, width = 12, units = "cm", res = 600)
+png(paste0("docs/fig_3B.png"), height = 12, width = 12, units = "cm", res = 600)
 plot(graphPlot)
 dummy <- dev.off()
 
